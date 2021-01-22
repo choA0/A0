@@ -1,0 +1,106 @@
+install.packages(c('stringr','stringi','tm','sna','xml2','dplyr','qgraph'))
+
+library(KoNLP)
+library(stringr); library(stringi);library(tm); library(sna);library(xml2);library(qgraph); library(dplyr)
+
+useNIADic()
+
+#### 지난시간 수집 데이터 업로딩
+
+f <- file("kindergarden.txt", encoding="UTF-8") 
+fl <- readLines(f) 
+close(f)
+
+
+#불용어 처리
+{
+  fl <- gsub("그러나","",fl); fl <- gsub("의","",fl); fl <- gsub("첫째","",fl);
+  fl <- gsub("둘째","",fl); fl <- gsub("셋째","",fl); fl <- gsub("이다","",fl);fl <- gsub("를","",fl);
+  fl <- gsub("필요하다","",fl);fl <- gsub("발생한다","",fl);fl <- gsub("할 수 있다","",fl);fl <- gsub("역시","",fl);
+  fl <- gsub("만일","",fl); fl <- gsub("내가","",fl); fl <- gsub("입니다","",fl); fl <- gsub("않았다면","",fl); fl <- gsub("이러한","",fl); 
+  fl <- gsub("본교","",fl); fl <- gsub("만약에","",fl); fl <- gsub("이에","",fl); fl <- gsub("이러한","",fl); fl <- gsub("있다고","",fl);
+  fl <- gsub("있다","",fl); fl <- gsub("같은","",fl); fl <- gsub("인식하였다","",fl); fl <- gsub("초등학교","",fl); fl <- gsub("유치원","",fl);
+  fl <- gsub("한다","",fl); fl <- gsub("대한","",fl); fl <- gsub("있는","",fl); fl <- gsub("통해","",fl); fl <- gsub("위해","",fl); fl <- gsub("위한","",fl);
+  fl <- gsub("있도록","",fl);fl <- gsub("하는","",fl);fl <- gsub("에서","",fl);fl <- gsub("통한","",fl);fl <- gsub("다음과","",fl);
+}
+
+#비슷한 단어 처리
+fl <- str_replace_all(fl, "[[:punct:]]", "") %>%
+  str_replace_all("학년", "저학년") %>%
+  str_replace_all("학생[들]", "학생") %>%
+  str_replace_all("발달[을｜에｜이]", "발달") %>%
+  str_replace_all("연계[성｜성성]", "유초연계") %>%
+  str_replace_all("연계", "유초연계") %>%
+  str_replace_all("저저학년", "저학년") %>%
+  str_replace_all("유아[와｜의｜들]", "유아") %>%
+  str_replace_all("유초", "유초연계") %>%
+  str_replace_all("유초연계계", "유초연계") %>%
+  str_replace_all("유유초연계초연계", "유초연계") %>%
+  str_replace_all("유초연계유초연계", "유초연계") %>%
+  str_replace_all("유초연계가", "유초연계") %>%
+  str_replace_all("학교생활생활", "학교생활") %>%
+  str_replace_all("유초연계연계", "유초연계") %>%
+  str_replace_all("유초연계계가", "유초연계") %>%
+  str_replace_all("학교생활을", "학교생활") %>%
+  str_replace_all("학교", "학교생활") %>%
+  str_replace_all("환경에", "환경") %>%
+  str_replace_all("유초연계성", "유초연계") %>%
+  str_replace_all("[학학]부모", "학부모") %>%
+  str_replace_all("유초 연계", "유초연계") %>%
+  str_replace_all("성장[과｜을]", "성장")
+
+write.table(fl,"preprocessing.txt")
+
+###전처리 완료된 파일 업로드
+f_1 <- file("preprocessing.txt", encoding="UTF-8")
+fl_1 <- readLines(f_1) 
+close(f_1) 
+
+
+#형태소 분석을 위한 ko.words 라는 이름의 함수를 정
+
+ko.words = function(doc){
+  doc = as.character(doc) 
+  doc2<-SimplePos22(doc)
+  doc3<-str_match(doc2,"[가-힣]+/NC" ) 
+  doc4[!is.na(doc4)] 
+}
+
+options(mc.cores = 1) 
+cps = Corpus(VectorSource(fl_1))
+
+#토큰화, ko.words 사용
+
+tdm <- TermDocumentMatrix(cps, control = list(tokenize = ko.words, 
+                                              removePunctuation=T,removeNumbers=T, 
+                                              wordLengths=c(4,Inf)))
+
+result <- as.matrix(tdm) 
+
+#핵심 키워드(최빈어) 찾기
+#상위빈도 15개 추출
+
+word.count = rowSums(result)
+word.order = order(word.count, decreasing = T)
+freq.word = result[word.order[1:20],]
+freq.word[,1]
+
+freqency <- data.frame(freq.word)
+write.csv(freqency,"kindergarden.csv") 
+
+#전치행렬로 바꾼 다음에 곱셈을 통해 공출현 행렬
+co.matrix = freq.word %*% t(freq.word)
+co.matrix
+
+####공출현 행렬을 그래프로 그리기
+install.packages("qgraph")
+library(qgraph)
+
+qg<-qgraph(co.matrix,labels=rownames(co.matrix), 
+           diag=F, layout='spring', 
+           label.cex= 4.0, 
+           edge.color='green', 
+           vsize=log(diag(co.matrix))*1.5) 
+
+qplot(qg) 
+
